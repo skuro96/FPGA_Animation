@@ -16,12 +16,12 @@ parameter V_BACK    = 33;
 parameter V_DISPLAY = 480;
 
 parameter H_SYNC_START    = H_FRONT;
-parameter H_SYNC_END      = H_FRONT + H_SYNC;
+parameter H_SYNC_END      = H_FRONT + H_SYNC - 1;
 parameter H_DISPLAY_START = H_FRONT + H_SYNC + H_BACK;
 parameter H_MAX           = H_FRONT + H_SYNC + H_BACK + H_DISPLAY - 1;
 
 parameter V_SYNC_START    = V_FRONT;
-parameter V_SYNC_END      = V_FRONT + V_SYNC;
+parameter V_SYNC_END      = V_FRONT + V_SYNC - 1;
 parameter V_DISPLAY_START = V_FRONT + V_SYNC + V_BACK;
 parameter V_MAX           = V_FRONT + V_SYNC + V_BACK + V_DISPLAY - 1;
 
@@ -43,10 +43,11 @@ reg[9:0] cnt_h = 10'b0; // 横
 reg[9:0] cnt_v = 10'b0; // 縦
 
 
-reg[18:0] tmp_cnt = 19'b0;
-reg[9:0] size = 10'd10;
-reg[1:0] out, buffer;
+// チャタリング除去しつつ、表示サイズを変更する
 
+reg[18:0] tmp_cnt = 0;
+reg[4:0] size = 10; // 1 <= size <= 30
+reg[1:0] out = 0, buffer = 0;
 
 always @(posedge CLK or negedge RESET) begin
 	if (!RESET)
@@ -55,9 +56,10 @@ always @(posedge CLK or negedge RESET) begin
 		tmp_cnt <= tmp_cnt + 1;
 end
 
-always @(posedge CLK)
+always @(posedge CLK) begin
 	if (tmp_cnt == 0)
 		out <= BUTTON;
+end
 
 always @(posedge CLK or negedge RESET) begin
 	if (!RESET)
@@ -71,20 +73,20 @@ assign dec = out[1] & ~buffer[1];
 
 always @(posedge CLK or negedge RESET) begin
 	if (!RESET) size <= 10;
-	else if (inc == 1) size <= size + 1;
-	else if (dec == 1) size <= size - 1;
+	else if (inc == 1) size <= (size == 30 ? 30 : size + 1);
+	else if (dec == 1) size <= (size == 1 ? 1 : size - 1);
 end
 
 reg[9:0]	H_DRAW_START = 240,
-			H_DRAW_END   = 400,
+			H_DRAW_END   = 399,
 			V_DRAW_START = 160,
-			V_DRAW_END   = 320;
+			V_DRAW_END   = 319;
 
 always @(size) begin
 	H_DRAW_START <= (H_DISPLAY - size * 16) / 2;
-	H_DRAW_END   <= H_DRAW_START + size * 16;
+	H_DRAW_END   <= H_DRAW_START + size * 16 - 1;
 	V_DRAW_START <= (V_DISPLAY - size * 16) / 2;
-	V_DRAW_END   <= V_DRAW_START + size * 16;
+	V_DRAW_END   <= V_DRAW_START + size * 16 - 1;
 end
 	
 
@@ -107,9 +109,9 @@ end
 
 always @(posedge VGA_CLK) begin
 	if (cnt_h == H_SYNC_START)
-		VGA_HS = 1'b0;
+		VGA_HS <= 1'b0;
 	if (cnt_h == H_SYNC_END)
-		VGA_HS = 1'b1;
+		VGA_HS <= 1'b1;
 end
 
 
@@ -117,9 +119,9 @@ end
 
 always @(posedge VGA_CLK) begin
 	if (cnt_v == V_SYNC_START)
-		VGA_VS = 1'b0;
+		VGA_VS <= 1'b0;
 	if (cnt_v == V_SYNC_END)
-		VGA_VS = 1'b1;
+		VGA_VS <= 1'b1;
 end
 
 
@@ -135,7 +137,7 @@ always @(posedge VGA_CLK) begin
 	end else begin
 		i <= cnt_v - V_DISPLAY_START;
 		j <= cnt_h - H_DISPLAY_START;
-		if (H_DRAW_START <= j && j < H_DRAW_END && V_DRAW_START <= i && i < V_DRAW_END) begin
+		if (H_DRAW_START <= j && j <= H_DRAW_END && V_DRAW_START <= i && i <= V_DRAW_END) begin
 			if (IMG[(j - H_DRAW_START) / size + ((i - V_DRAW_START) / size) * 16] == 1'b1) begin
 				VGA_R <= 4'b1111;
 				VGA_G <= 4'b0000;
